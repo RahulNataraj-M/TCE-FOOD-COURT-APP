@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../controllers/cart_controller.dart';
+import '../models/order.dart';
+import '../services/app_scope.dart';
+import '../services/firebase_errors.dart';
 import '../theme/app_theme.dart';
 import 'order_confirmation_screen.dart';
 
@@ -14,6 +17,56 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   _PayMethod _selected = _PayMethod.upi;
+  bool _isPlacingOrder = false;
+
+  /// Saves the order to Cloud Firestore and only then confirms the payment.
+  ///
+  /// The navigation is intentionally blocked while the write is in flight and
+  /// aborted when it fails, so the user never sees "Payment Successful" for an
+  /// order that was not stored.
+  Future<void> _pay() async {
+    if (_isPlacingOrder) return;
+    setState(() => _isPlacingOrder = true);
+
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final cart = CartController.instance;
+    final ordersController = AppScope.of(context).ordersController;
+
+    try {
+      final order = Order(
+        id: Order.generateDisplayId(),
+        total: cart.total,
+        placedAt: DateTime.now(),
+        items: [
+          for (final entry in cart.items)
+            OrderItem(
+              name: entry.item.name,
+              quantity: entry.quantity,
+              unitPrice: entry.item.price,
+            ),
+        ],
+      );
+      final saved = await ordersController.placeOrder(order);
+      if (!mounted) return;
+      navigator.pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => OrderConfirmationScreen(order: saved),
+        ),
+      );
+    } on Object catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not place your order. ${FirebaseErrors.describe(error)}',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isPlacingOrder = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,41 +146,45 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
         child: SafeArea(
           top: false,
-          child: SizedBox(
-            height: 48,
-            child: FilledButton(
-              onPressed: () {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(
-                    builder: (_) => const OrderConfirmationScreen(),
+child: SizedBox(
+              height: 48,
+              child: FilledButton(
+                onPressed: _isPlacingOrder ? null : _pay,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryContainer,
+                  foregroundColor: AppColors.onPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                );
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primaryContainer,
-                foregroundColor: AppColors.onPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  elevation: 4,
+                  shadowColor: AppColors.primaryContainer.withValues(alpha: 0.5),
                 ),
-                elevation: 4,
-                shadowColor: AppColors.primaryContainer.withValues(alpha: 0.5),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.lock, size: 18, fill: 1),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'Pay ₹${cart.total}',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isPlacingOrder)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.onPrimary,
+                        ),
+                      )
+                    else
+                      const Icon(Icons.lock, size: 18, fill: 1),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'Pay ₹${cart.total}',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
         ),
       ),
     );

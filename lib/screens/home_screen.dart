@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../controllers/cart_controller.dart';
 import '../models/menu_item.dart';
+import '../services/app_scope.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'cart_screen.dart';
@@ -15,6 +16,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = CartController.instance;
+    final menuController = AppScope.of(context).menuController;
     return Scaffold(
       backgroundColor: AppColors.surfaceGray,
       body: Column(
@@ -31,7 +33,11 @@ class HomeScreen extends StatelessWidget {
                   child: _Greeting(),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                const _MostOrderedSection(),
+                ListenableBuilder(
+                  listenable: menuController,
+                  builder: (context, _) =>
+                      _MostOrderedSection(items: menuController.items),
+                ),
                 const SizedBox(height: AppSpacing.xl),
                 const _QuickActions(),
                 const SizedBox(height: AppSpacing.xl),
@@ -147,7 +153,9 @@ class _Greeting extends StatelessWidget {
 }
 
 class _MostOrderedSection extends StatelessWidget {
-  const _MostOrderedSection();
+  final List<MenuItem> items;
+
+  const _MostOrderedSection({required this.items});
 
   Widget _header(BuildContext context) {
     return Padding(
@@ -186,7 +194,7 @@ class _MostOrderedSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final popular = MenuCatalog.items.where((i) => i.rating > 0).toList();
+    final popular = items.where((i) => i.rating > 0).toList();
     return Column(
       children: [
         _header(context),

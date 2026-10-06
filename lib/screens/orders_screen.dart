@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../models/order.dart';
+import '../services/app_scope.dart';
+import '../services/firebase_errors.dart';
 import '../theme/app_theme.dart';
 import 'cancel_order_screen.dart';
 import 'replace_order_screen.dart';
@@ -9,27 +12,60 @@ class OrdersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ordersController = AppScope.of(context).ordersController;
     return Scaffold(
       backgroundColor: AppColors.surfaceGray,
       body: Column(
         children: [
           const _OrdersHeader(),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.marginMobile,
-                right: AppSpacing.marginMobile,
-                top: AppSpacing.lg,
-                bottom: 24,
+            child: ListenableBuilder(
+              listenable: ordersController,
+              builder: (context, _) => ListView(
+                padding: const EdgeInsets.only(
+                  left: AppSpacing.marginMobile,
+                  right: AppSpacing.marginMobile,
+                  top: AppSpacing.lg,
+                  bottom: 24,
+                ),
+                children: [
+                  if (ordersController.lastError != null)
+                    _OrdersErrorNotice(
+                      message: FirebaseErrors.describe(
+                        ordersController.lastError!,
+                      ),
+                    ),
+                  _ActiveOrderSection(order: ordersController.activeOrder),
+                  const SizedBox(height: AppSpacing.xl),
+                  _OrderHistorySection(orders: ordersController.history),
+                ],
               ),
-              children: const [
-                _ActiveOrderSection(),
-                SizedBox(height: AppSpacing.xl),
-                _OrderHistorySection(),
-              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OrdersErrorNotice extends StatelessWidget {
+  final String message;
+
+  const _OrdersErrorNotice({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Could not load your latest orders. $message',
+        style: const TextStyle(color: AppColors.secondary, fontSize: 13),
       ),
     );
   }
@@ -42,9 +78,7 @@ class _OrdersHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: AppColors.surface,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top,
-      ),
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       child: Row(
         children: [
           IconButton(
@@ -82,11 +116,13 @@ class _OrdersHeader extends StatelessWidget {
 }
 
 class _ActiveOrderSection extends StatelessWidget {
-  const _ActiveOrderSection();
+  final Order? order;
+
+  const _ActiveOrderSection({required this.order});
 
   @override
   Widget build(BuildContext context) {
-    final order = SampleOrders.activeOrder;
+    final order = this.order;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -97,119 +133,135 @@ class _ActiveOrderSection extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.borderSubtle),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 8,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _OrderIdRow(order: order),
-              const SizedBox(height: AppSpacing.md),
-              for (var i = 0; i < order.items.length; i++) ...[
-                if (i > 0) const Divider(color: AppColors.surfaceContainer),
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        order.items[i].name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: AppColors.onSurface,
-                        ),
-                      ),
-                      Text(
-                        'x ${order.items[i].quantity}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: AppColors.secondary,
-                        ),
-                      ),
-                    ],
-                  ),
+        if (order == null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            alignment: Alignment.center,
+            child: const Text(
+              'No active order right now.',
+              style: TextStyle(color: AppColors.secondary, fontSize: 14),
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerLowest,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderSubtle),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
                 ),
               ],
-              const SizedBox(height: AppSpacing.xs),
-              const _StatusTimeline(),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const CancelOrderScreen(),
-                            ),
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _OrderIdRow(order: order),
+                const SizedBox(height: AppSpacing.md),
+                for (var i = 0; i < order.items.length; i++) ...[
+                  if (i > 0) const Divider(color: AppColors.surfaceContainer),
+                  Padding(
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          order.items[i].name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: AppColors.onSurface,
                           ),
                         ),
-                        child: const Text(
-                          'Cancel Order',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.6,
+                        Text(
+                          'x ${order.items[i].quantity}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: AppColors.secondary,
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: FilledButton(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const ReplaceOrderScreen(),
-                            ),
-                          );
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.onPrimary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Replace Order',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ],
+                const SizedBox(height: AppSpacing.xs),
+                _StatusTimeline(status: order.status),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CancelOrderScreen(),
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Cancel Order',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ReplaceOrderScreen(),
+                              ),
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.onPrimary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Replace Order',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.6,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -277,10 +329,29 @@ class _OrderIdRow extends StatelessWidget {
 }
 
 class _StatusTimeline extends StatelessWidget {
-  const _StatusTimeline();
+  final OrderStatus status;
+
+  const _StatusTimeline({required this.status});
+
+  /// How many timeline dots are reached for each order status.
+  static int _reachedFor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.placed:
+        return 1;
+      case OrderStatus.preparing:
+        return 2;
+      case OrderStatus.ready:
+        return 3;
+      case OrderStatus.completed:
+        return 4;
+      case OrderStatus.cancelled:
+        return 0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final reached = _reachedFor(status);
     return Stack(
       children: [
         Positioned(
@@ -291,16 +362,21 @@ class _StatusTimeline extends StatelessWidget {
         ),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: const [
-            _TimelineStep(label: 'Placed', active: true),
-            _TimelineStep(label: 'Preparing'),
-            _TimelineStep(label: 'Ready'),
-            _TimelineStep(label: 'Completed'),
+          children: [
+            for (var i = 0; i < _labels.length; i++)
+              _TimelineStep(label: _labels[i], active: i < reached),
           ],
         ),
       ],
     );
   }
+
+  static const List<String> _labels = [
+    'Placed',
+    'Preparing',
+    'Ready',
+    'Completed',
+  ];
 }
 
 class _TimelineStep extends StatelessWidget {
@@ -354,7 +430,9 @@ class _TimelineStep extends StatelessWidget {
 }
 
 class _OrderHistorySection extends StatelessWidget {
-  const _OrderHistorySection();
+  final List<Order> orders;
+
+  const _OrderHistorySection({required this.orders});
 
   @override
   Widget build(BuildContext context) {
@@ -368,7 +446,15 @@ class _OrderHistorySection extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
           ),
         ),
-        for (final order in SampleOrders.history)
+        if (orders.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.sm),
+            child: Text(
+              'No past orders yet.',
+              style: TextStyle(color: AppColors.secondary, fontSize: 14),
+            ),
+          ),
+        for (final order in orders)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
             child: _HistoryCard(order: order),
@@ -399,11 +485,7 @@ class _HistoryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.borderSubtle),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
@@ -446,8 +528,9 @@ class _HistoryCard extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.successGreen
-                                .withValues(alpha: 0.1),
+                            color: AppColors.successGreen.withValues(
+                              alpha: 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(100),
                           ),
                           child: const Text(

@@ -16,6 +16,9 @@ class OrderItem {
 
 class Order {
   final String id;
+
+  /// Firestore document id, or null for orders that are not persisted yet.
+  final String? docId;
   final List<OrderItem> items;
   final int total;
   final DateTime placedAt;
@@ -27,9 +30,62 @@ class Order {
     required this.total,
     required this.placedAt,
     this.status = OrderStatus.placed,
+    this.docId,
   });
 
   int get itemSummary => items.fold(0, (sum, i) => sum + i.quantity);
+
+  /// Whether the order is still being worked on by the kitchen.
+  bool get isActive =>
+      status == OrderStatus.placed ||
+      status == OrderStatus.preparing ||
+      status == OrderStatus.ready;
+
+  Order copyWith({OrderStatus? status, String? docId}) {
+    return Order(
+      id: id,
+      items: items,
+      total: total,
+      placedAt: placedAt,
+      status: status ?? this.status,
+      docId: docId ?? this.docId,
+    );
+  }
+
+  /// Document fields, minus the Firestore specific timestamp conversion that
+  /// the repository applies.
+  Map<String, dynamic> toMap() {
+    return {
+      'displayId': id,
+      'total': total,
+      'status': status.name,
+      'placedAt': placedAt.toUtc(),
+      'items': [
+        for (final item in items)
+          {
+            'name': item.name,
+            'quantity': item.quantity,
+            'unitPrice': item.unitPrice,
+          },
+      ],
+    };
+  }
+
+  /// Generates the customer-facing order number, e.g. `#TCE1042`.
+  static String generateDisplayId() {
+    final suffix =
+        1000 + (DateTime.now().millisecondsSinceEpoch % 9000);
+    return '#TCE$suffix';
+  }
+
+  /// Reads [OrderStatus.name] back, defaulting to [OrderStatus.placed] for
+  /// unknown or missing values.
+  static OrderStatus statusFromName(String? value) {
+    for (final status in OrderStatus.values) {
+      if (status.name == value) return status;
+    }
+    return OrderStatus.placed;
+  }
 }
 
 class SampleOrders {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../controllers/cart_controller.dart';
 import '../models/menu_item.dart';
+import '../services/app_scope.dart';
+import '../services/firebase_errors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'cart_screen.dart';
@@ -23,10 +25,10 @@ class _MenuScreenState extends State<MenuScreen> {
     super.dispose();
   }
 
-  List<MenuItem> get _filtered {
-    return MenuCatalog.items.where((item) {
+  List<MenuItem> _filtered(List<MenuItem> items, String category) {
+    return items.where((item) {
       final matchesCategory =
-          _selectedCategory == 'All' || item.category == _selectedCategory;
+          category == 'All' || item.category == category;
       final query = _query.trim().toLowerCase();
       final matchesQuery =
           query.isEmpty || item.name.toLowerCase().contains(query);
@@ -37,6 +39,7 @@ class _MenuScreenState extends State<MenuScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = CartController.instance;
+    final menuController = AppScope.of(context).menuController;
     return Scaffold(
       backgroundColor: AppColors.surfaceGray,
       body: Stack(
@@ -58,16 +61,41 @@ class _MenuScreenState extends State<MenuScreen> {
                       onChanged: (v) => setState(() => _query = v),
                     ),
                     const SizedBox(height: AppSpacing.marginMobile),
-                    _CategoryChips(
-                      selected: _selectedCategory,
-                      onSelected: (c) => setState(() => _selectedCategory = c),
-                    ),
-                    const SizedBox(height: AppSpacing.marginMobile),
-                    ..._filtered.map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: _MenuFoodCard(item: item),
-                      ),
+                    ListenableBuilder(
+                      listenable: menuController,
+                      builder: (context, _) {
+                        final categories = menuController.categories;
+                        // The Firestore menu may not contain the chip the user
+                        // had selected, so fall back to "All" for this frame.
+                        final selected = categories.contains(_selectedCategory)
+                            ? _selectedCategory
+                            : 'All';
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (menuController.lastError != null)
+                              _DataNotice(
+                                message:
+                                    'Showing the saved menu. ${FirebaseErrors.describe(menuController.lastError!)}',
+                              ),
+                            _CategoryChips(
+                              categories: categories,
+                              selected: selected,
+                              onSelected: (c) =>
+                                  setState(() => _selectedCategory = c),
+                            ),
+                            const SizedBox(height: AppSpacing.marginMobile),
+                            ..._filtered(menuController.items, selected)
+                                .map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.md),
+                                child: _MenuFoodCard(item: item),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -97,6 +125,30 @@ class _MenuScreenState extends State<MenuScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+}
+
+class _DataNotice extends StatelessWidget {
+  final String message;
+
+  const _DataNotice({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(color: AppColors.secondary, fontSize: 13),
       ),
     );
   }
@@ -217,10 +269,15 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _CategoryChips extends StatelessWidget {
+  final List<String> categories;
   final String selected;
   final ValueChanged<String> onSelected;
 
-  const _CategoryChips({required this.selected, required this.onSelected});
+  const _CategoryChips({
+    required this.categories,
+    required this.selected,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -228,10 +285,10 @@ class _CategoryChips extends StatelessWidget {
       height: 40,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: MenuCatalog.categories.length,
+        itemCount: categories.length,
         separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
         itemBuilder: (context, i) {
-          final category = MenuCatalog.categories[i];
+          final category = categories[i];
           final active = category == selected;
           return GestureDetector(
             onTap: () => onSelected(category),

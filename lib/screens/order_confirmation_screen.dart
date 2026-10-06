@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import '../controllers/cart_controller.dart';
 import '../models/order.dart';
+import '../services/app_scope.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
-  const OrderConfirmationScreen({super.key});
+  const OrderConfirmationScreen({super.key, this.order});
+
+  /// The order that was just saved to Firestore.
+  ///
+  /// Null falls back to the signed-in user's active order, which keeps the
+  /// screen usable when it is opened without a freshly placed order.
+  final Order? order;
 
   @override
   State<OrderConfirmationScreen> createState() =>
@@ -20,6 +27,11 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
       CartController.instance.clear();
     });
   }
+
+  Order get _order =>
+      widget.order ??
+      AppScope.of(context).ordersController.activeOrder ??
+      SampleOrders.activeOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +79,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                const _OrderDetailsCard(),
+                _OrderDetailsCard(order: _order),
                 const SizedBox(height: AppSpacing.xl),
                 SizedBox(
                   width: double.infinity,
@@ -80,7 +92,9 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                             selectedIndex: 1,
                           ),
                         ),
-                        (route) => false,
+                        // Keep the root AuthGate route so a later sign out can
+                        // still return to the login screen.
+                        (route) => route.isFirst,
                       );
                     },
                     style: FilledButton.styleFrom(
@@ -113,7 +127,9 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                             selectedIndex: 0,
                           ),
                         ),
-                        (route) => false,
+                        // Keep the root AuthGate route so a later sign out can
+                        // still return to the login screen.
+                        (route) => route.isFirst,
                       );
                     },
                     style: OutlinedButton.styleFrom(
@@ -165,11 +181,12 @@ class _SuccessIcon extends StatelessWidget {
 }
 
 class _OrderDetailsCard extends StatelessWidget {
-  const _OrderDetailsCard();
+  final Order order;
+
+  const _OrderDetailsCard({required this.order});
 
   @override
   Widget build(BuildContext context) {
-    final order = SampleOrders.activeOrder;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -180,7 +197,7 @@ class _OrderDetailsCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const _DetailRow(label: 'Order Number', value: '#TCE1024'),
+          _DetailRow(label: 'Order Number', value: order.id),
           const Divider(color: AppColors.borderSubtle, height: AppSpacing.md),
           _DetailRow(label: 'Total Amount', value: '₹${order.total}'),
           const Divider(color: AppColors.borderSubtle, height: AppSpacing.md),

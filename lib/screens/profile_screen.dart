@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../controllers/cart_controller.dart';
 import '../models/menu_item.dart';
+import '../services/app_scope.dart';
+import '../services/auth_service.dart';
+import '../services/firebase_errors.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import 'contact_screen.dart';
-import 'login_screen.dart';
 import 'menu_screen.dart';
+import 'orders_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -13,6 +16,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cart = CartController.instance;
+    final services = AppScope.of(context);
     return Scaffold(
       backgroundColor: AppColors.surfaceGray,
       body: Column(
@@ -21,14 +25,19 @@ class ProfileScreen extends StatelessWidget {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.marginMobile),
-              children: const [
-                _ProfileCard(),
-                SizedBox(height: AppSpacing.lg),
-                _MenuList(),
-                SizedBox(height: AppSpacing.lg),
-                _FrequentItems(),
-                SizedBox(height: AppSpacing.md),
-                _LogoutButton(),
+              children: [
+                const _ProfileCard(),
+                const SizedBox(height: AppSpacing.lg),
+                const _MenuList(),
+                const SizedBox(height: AppSpacing.lg),
+                ListenableBuilder(
+                  listenable: services.menuController,
+                  builder: (context, _) => _FrequentItems(
+                    items: services.menuController.items,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _LogoutButton(authService: services.authService),
               ],
             ),
           ),
@@ -103,38 +112,55 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = AppScope.of(context).authService.currentUser;
+    final name = user?.displayName?.trim();
+    final email = user?.email;
+    final photoUrl = user?.photoURL;
+
     return Column(
       children: [
         ClipOval(
-          child: Image.asset(
-            'assets/images/avatar.jpg',
-            width: 96,
-            height: 96,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stack) {
-              return const IniAvatar(
-                label: 'John Doe',
-                size: 96,
-                background: AppColors.surfaceContainer,
-                foreground: AppColors.primaryContainer,
-              );
-            },
-          ),
+          child: photoUrl == null || photoUrl.isEmpty
+              // No Google profile photo: keep the bundled avatar.
+              ? Image.asset(
+                  'assets/images/avatar.jpg',
+                  width: 96,
+                  height: 96,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) => _fallback(name, email),
+                )
+              : Image.network(
+                  photoUrl,
+                  width: 96,
+                  height: 96,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stack) =>
+                      _fallback(name, email),
+                ),
         ),
         const SizedBox(height: AppSpacing.xs),
-        const Text(
-          'John Doe',
-          style: TextStyle(
+        Text(
+          (name == null || name.isEmpty) ? 'TCE Student' : name,
+          style: const TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: AppColors.onSurface,
           ),
         ),
-        const Text(
-          'johndoe@student.tce.edu',
-          style: TextStyle(fontSize: 14, color: AppColors.secondary),
+        Text(
+          email ?? '',
+          style: const TextStyle(fontSize: 14, color: AppColors.secondary),
         ),
       ],
+    );
+  }
+
+  Widget _fallback(String? name, String? email) {
+    return IniAvatar(
+      label: name ?? email ?? '',
+      size: 96,
+      background: AppColors.surfaceContainer,
+      foreground: AppColors.primaryContainer,
     );
   }
 }
@@ -151,7 +177,7 @@ class _MenuList extends StatelessWidget {
           label: 'Order History',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const _OrdersPlaceholder()),
+              MaterialPageRoute(builder: (_) => const OrdersScreen()),
             );
           },
         ),
@@ -230,36 +256,14 @@ class _ProfileItem extends StatelessWidget {
   }
 }
 
-class _OrdersPlaceholder extends StatelessWidget {
-  const _OrdersPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Order History'),
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.primary,
-        elevation: 0,
-      ),
-      body: const Center(
-        child: Text(
-          'Order history coming soon',
-          style: TextStyle(color: AppColors.secondary, fontSize: 14),
-        ),
-      ),
-    );
-  }
-}
-
 class _FrequentItems extends StatelessWidget {
-  const _FrequentItems();
+  final List<MenuItem> items;
+
+  const _FrequentItems({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    final items = MenuCatalog.items
-        .where((i) => i.timesOrdered > 0)
-        .toList()
+    final frequent = items.where((i) => i.timesOrdered > 0).toList()
       ..sort((a, b) => b.timesOrdered.compareTo(a.timesOrdered));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,7 +275,7 @@ class _FrequentItems extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
         ),
-        for (final item in items)
+        for (final item in frequent)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: _FrequentItemCard(item: item),
@@ -371,7 +375,28 @@ class _FrequentItemCard extends StatelessWidget {
 }
 
 class _LogoutButton extends StatelessWidget {
-  const _LogoutButton();
+  final AuthService authService;
+
+  const _LogoutButton({required this.authService});
+
+  Future<void> _signOut(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    CartController.instance.clear();
+    try {
+      await authService.signOut();
+      // The AuthGate renders the login screen for a signed-out session, but it
+      // is the first route, so return to it from any pushed route.
+      navigator.popUntil((route) => route.isFirst);
+    } on Object catch (error) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(FirebaseErrors.describe(error)),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -379,13 +404,7 @@ class _LogoutButton extends StatelessWidget {
       width: double.infinity,
       height: 56,
       child: OutlinedButton(
-        onPressed: () {
-          CartController.instance.clear();
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
-          );
-        },
+        onPressed: () => _signOut(context),
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.error,
           side: const BorderSide(color: AppColors.error, width: 2),

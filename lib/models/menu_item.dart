@@ -16,6 +16,51 @@ class MenuItem {
     this.rating = 0,
     this.timesOrdered = 0,
   });
+
+  /// Builds an item from a `menu_items` document.
+  ///
+  /// Only primitives are read, so this works for both real Firestore documents
+  /// and the bundled fallback data. Fields are optional because the document is
+  /// authored by hand in the Firebase console.
+  factory MenuItem.fromMap(Map<String, dynamic> data) {
+    return MenuItem(
+      name: _asString(data['name']),
+      description: _asString(data['description']),
+      price: _asInt(data['price']),
+      imageAsset: _asString(data['imageAsset']),
+      category: _asString(data['category']),
+      rating: _asDouble(data['rating']),
+      timesOrdered: _asInt(data['timesOrdered']),
+    );
+  }
+
+  /// Serialisable form used when writing the item back to Firestore.
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'description': description,
+      'price': price,
+      'imageAsset': imageAsset,
+      'category': category,
+      'rating': rating,
+      'timesOrdered': timesOrdered,
+    };
+  }
+
+  /// Whether this item can be rendered, i.e. it has a name.
+  bool get isValid => name.isNotEmpty;
+}
+
+String _asString(Object? value) => value?.toString() ?? '';
+
+int _asInt(Object? value) {
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse(value?.toString() ?? '') ?? 0;
 }
 
 class CartItem {

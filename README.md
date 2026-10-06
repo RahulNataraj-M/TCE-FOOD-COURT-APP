@@ -1,17 +1,44 @@
-# tce_foodcourt_app
+# TCE Food Court
 
-A new Flutter project.
+Flutter food-ordering app using Firebase Authentication and Cloud Firestore.
 
-## Getting Started
+## Firebase console setup
 
-This project is a starting point for a Flutter application.
+1. Create or select the Firebase project referenced by `lib/firebase_options.dart`.
+2. Enable **Authentication > Sign-in method > Google**.
+3. Enable **Authentication > Sign-in method > Email/Password**.
+4. Add the web app's authorized domain under **Authentication > Settings**.
+5. For web, the app uses Firebase Auth's Google popup, so no separate
+   `google_sign_in` Web Client ID is required. Add the domain where the app is
+   hosted to **Authentication > Settings > Authorized domains** and allow
+   pop-ups in the browser.
+6. Add a `menu_items` collection. Each document should contain `name`,
+   `description`, `price`, `imageAsset`, `category`, `rating`, and
+   `timesOrdered`.
+7. Deploy the included rules from the repository root:
 
-A few resources to get you started if this is your first Flutter project:
+   ```text
+   firebase login
+   firebase use <your-project-id>
+   firebase deploy --only firestore:rules
+   ```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+   The menu is readable by everyone, while user profiles and orders are
+   restricted to the authenticated owner. Email/password and Google accounts
+   must use an address ending in `@student.tce.edu`. New account creation also
+   collects first name, last name, phone number, student email, and password.
+   Orders are stored at
+   `users/{uid}/orders/{orderId}`.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Verify locally
+
+```text
+flutter pub get
+flutter analyze
+flutter test
+flutter build web
+```
+
+If Firestore is unavailable or has no menu documents, the app keeps its
+bundled menu catalog. If a signed-in user has no orders, the Orders screen
+shows its bundled sample orders.
