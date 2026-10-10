@@ -1,1 +1,29 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tce-foodcourt-app","appId":"1:154735778480:android:baf269d2de62fdd7847975","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tce-foodcourt-app","configurations":{"android":"1:154735778480:android:baf269d2de62fdd7847975","ios":"1:154735778480:ios:e7706f0b18d625ba847975","macos":"1:154735778480:ios:e7706f0b18d625ba847975","web":"1:154735778480:web:b098d2d611e6dc4c847975","windows":"1:154735778480:web:b416d7de06e43d4b847975"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tce-foodcourt-app",
+          "appId": "1:154735778480:android:baf269d2de62fdd7847975",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tce-foodcourt-app",
+          "configurations": {
+            "android": "1:154735778480:android:baf269d2de62fdd7847975",
+            "ios": "1:154735778480:ios:e7706f0b18d625ba847975",
+            "macos": "1:154735778480:ios:e7706f0b18d625ba847975",
+            "web": "1:154735778480:web:b098d2d611e6dc4c847975",
+            "windows": "1:154735778480:web:b416d7de06e43d4b847975"
+          }
+        }
+      }
+    }
+  }
+}
