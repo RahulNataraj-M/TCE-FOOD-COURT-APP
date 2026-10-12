@@ -4,16 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import '../config/app_config.dart';
 import '../models/order.dart';
 import '../services/auth_service.dart';
+import '../services/local_database.dart';
 
-/// Reads and writes the signed-in user's orders in Cloud Firestore.
+/// Reads and writes the signed-in user's orders in Cloud Firestore, backed by a
+/// local SQLite cache.
 ///
 /// Orders are stored per user at `users/{uid}/orders/{docId}` so a user can
-/// never read another student's orders, even before rules are in place.
+/// never read another student's orders, even before rules are in place. The
+/// cache mirrors the last successful read so orders stay visible offline.
 class OrderRepository {
-  OrderRepository({this._firestore, this._authService});
+  OrderRepository({this._firestore, this._authService, this._localDatabase});
 
   final FirebaseFirestore? _firestore;
   final AuthService? _authService;
+  final LocalDatabase? _localDatabase;
 
   FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
 
@@ -30,33 +34,48 @@ class OrderRepository {
 
   /// Stores [order] and returns it with its Firestore document id attached.
   ///
-  /// Throws [StateError] when there is no signed-in user and
-  /// [FirebaseException] when the write fails.
+  /// The saved order is also written to the local cache. Throws [StateError]
+  /// when there is no signed-in user and [FirebaseException] when the write
+  /// fails.
   Future<Order> createOrder(Order order) async {
     final orders = _orders;
-    if (orders == null) {
+    final uid = _uid;
+    if (orders == null || uid == null) {
       throw StateError('Cannot save an order without a signed-in user.');
     }
 
     final data = order.toMap();
     data['placedAt'] = Timestamp.fromDate(order.placedAt.toUtc());
     final doc = await orders.add(data);
-    return order.copyWith(docId: doc.id);
+    final saved = order.copyWith(docId: doc.id);
+    await _localDatabase?.cacheOrder(saved, userId: uid);
+    return saved;
   }
 
   /// Loads the user's orders, newest first. Returns an empty list when signed
-  /// out, and throws [FirebaseException] when the read fails.
+  /// out.
+  ///
+  /// Falls back to the cached orders when the Firestore read fails; throws a
+  /// [FirebaseException] only when there is no cache either.
   Future<List<Order>> fetchOrders() async {
     final orders = _orders;
-    if (orders == null) return const [];
+    final uid = _uid;
+    if (orders == null || uid == null) return const [];
 
-    final snapshot = await orders.orderBy('placedAt', descending: true).get();
-    final result = <Order>[];
-    for (final doc in snapshot.docs) {
-      final order = _fromDoc(doc);
-      if (order != null) result.add(order);
+    try {
+      final snapshot = await orders.orderBy('placedAt', descending: true).get();
+      final result = <Order>[];
+      for (final doc in snapshot.docs) {
+        final order = _fromDoc(doc);
+        if (order != null) result.add(order);
+      }
+      await _localDatabase?.cacheOrders(result, userId: uid);
+      return result;
+    } on Object {
+      final cached = await _localDatabase?.readOrders(uid) ?? const <Order>[];
+      if (cached.isNotEmpty) return cached;
+      rethrow;
     }
-    return result;
   }
 
   /// Updates the status of a persisted order, e.g. when it is cancelled.
@@ -67,6 +86,7 @@ class OrderRepository {
       throw StateError('Cannot update an order that is not persisted.');
     }
     await orders.doc(docId).update({'status': status.name});
+    await _localDatabase?.updateOrderStatus(docId, status);
     return order.copyWith(status: status);
   }
 

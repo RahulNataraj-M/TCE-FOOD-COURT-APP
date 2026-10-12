@@ -6,6 +6,7 @@ import '../controllers/orders_controller.dart';
 import '../repositories/menu_repository.dart';
 import '../repositories/order_repository.dart';
 import 'auth_service.dart';
+import 'local_database.dart';
 
 /// The Firebase-backed dependencies of the app.
 ///
@@ -19,13 +20,18 @@ class AppServices {
     required this.orderRepository,
     required this.menuController,
     required this.ordersController,
+    this.localDatabase,
   });
 
-  /// Wires the real Firebase Authentication and Cloud Firestore services.
+  /// Wires the real Firebase Authentication, Cloud Firestore and SQLite cache.
   factory AppServices.production() {
     final authService = FirebaseAuthService();
-    final menuRepository = MenuRepository();
-    final orderRepository = OrderRepository(authService: authService);
+    final localDatabase = LocalDatabase();
+    final menuRepository = MenuRepository(localDatabase: localDatabase);
+    final orderRepository = OrderRepository(
+      authService: authService,
+      localDatabase: localDatabase,
+    );
     return AppServices(
       authService: authService,
       menuRepository: menuRepository,
@@ -35,6 +41,7 @@ class AppServices {
         repository: orderRepository,
         authService: authService,
       ),
+      localDatabase: localDatabase,
     );
   }
 
@@ -43,6 +50,10 @@ class AppServices {
   final OrderRepository orderRepository;
   final MenuController menuController;
   final OrdersController ordersController;
+
+  /// The on-device SQLite cache used for offline menu and order access. Null in
+  /// tests that do not exercise local storage.
+  final LocalDatabase? localDatabase;
 
   /// Prepares Google Sign-In. Await this before the first sign-in attempt.
   Future<void> initialize() => authService.initialize();
@@ -56,6 +67,7 @@ class AppServices {
   void dispose() {
     menuController.dispose();
     ordersController.dispose();
+    localDatabase?.close();
   }
 }
 

@@ -1,6 +1,7 @@
 # TCE Food Court
 
-Flutter food-ordering app using Firebase Authentication and Cloud Firestore.
+Flutter food-ordering app using Firebase Authentication, Cloud Firestore and a
+local SQLite cache.
 
 ## Firebase console setup
 
@@ -39,6 +40,19 @@ flutter test
 flutter build web
 ```
 
-If Firestore is unavailable or has no menu documents, the app keeps its
-bundled menu catalog. If a signed-in user has no orders, the Orders screen
-shows its bundled sample orders.
+## Local cache
+
+Cloud Firestore stays the source of truth. A SQLite database
+(`tce_foodcourt.db`, see `lib/services/local_database.dart`) mirrors the last
+successful menu and order reads so the app starts instantly and keeps working
+offline:
+
+- A successful menu read refreshes the cache; if Firestore is unreachable the
+  cached menu is served instead.
+- Placed orders are cached locally, and the cached list is served when Firestore
+  cannot be reached. Cached orders are scoped per signed-in user.
+
+If Firestore is unavailable and nothing is cached, the app keeps its bundled
+menu catalog. If a signed-in user has no orders, the Orders screen shows its
+bundled sample orders. The cache is disabled on web, where sqflite has no
+implementation.

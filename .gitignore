@@ -72,6 +72,9 @@ firebase-adminsdk-*.json
 secrets/
 private/
 
+# Archives (may contain credentials)
+*.zip
+
 # IDE files
 .vscode/
 
