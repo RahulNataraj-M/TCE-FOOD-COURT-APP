@@ -4,6 +4,7 @@ import '../models/order.dart';
 import '../services/app_scope.dart';
 import '../theme/app_theme.dart';
 import '../widgets/bottom_nav.dart';
+import 'orders_screen.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
   const OrderConfirmationScreen({super.key, this.order});
@@ -86,14 +87,12 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   height: 48,
                   child: FilledButton.icon(
                     onPressed: () {
+                      // Opens the order history inside the current tab so the
+                      // Home/Profile bottom bar stays visible.
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(
-                          builder: (_) => const BottomNavScaffold(
-                            selectedIndex: 1,
-                          ),
+                          builder: (_) => const OrdersScreen(),
                         ),
-                        // Keep the root AuthGate route so a later sign out can
-                        // still return to the login screen.
                         (route) => route.isFirst,
                       );
                     },
@@ -121,14 +120,8 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                   height: 48,
                   child: OutlinedButton(
                     onPressed: () {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(
-                          builder: (_) => const BottomNavScaffold(
-                            selectedIndex: 0,
-                          ),
-                        ),
-                        // Keep the root AuthGate route so a later sign out can
-                        // still return to the login screen.
+                      MainShellScope.maybeOf(context)?.selectTab(0);
+                      Navigator.of(context).popUntil(
                         (route) => route.isFirst,
                       );
                     },

@@ -7,6 +7,15 @@ class MenuItem {
   final double rating;
   final int timesOrdered;
 
+  /// Whether the item is currently available for ordering.
+  ///
+  /// Admins can toggle this; unavailable items are hidden from the student
+  /// menu but remain visible in the admin panel.
+  final bool available;
+
+  /// Firestore document id, populated for admin CRUD operations.
+  final String? docId;
+
   const MenuItem({
     required this.name,
     required this.description,
@@ -15,6 +24,8 @@ class MenuItem {
     required this.category,
     this.rating = 0,
     this.timesOrdered = 0,
+    this.available = true,
+    this.docId,
   });
 
   /// Builds an item from a `menu_items` document.
@@ -22,7 +33,7 @@ class MenuItem {
   /// Only primitives are read, so this works for both real Firestore documents
   /// and the bundled fallback data. Fields are optional because the document is
   /// authored by hand in the Firebase console.
-  factory MenuItem.fromMap(Map<String, dynamic> data) {
+  factory MenuItem.fromMap(Map<String, dynamic> data, {String? docId}) {
     return MenuItem(
       name: _asString(data['name']),
       description: _asString(data['description']),
@@ -31,6 +42,8 @@ class MenuItem {
       category: _asString(data['category']),
       rating: _asDouble(data['rating']),
       timesOrdered: _asInt(data['timesOrdered']),
+      available: data['available'] != false,
+      docId: docId,
     );
   }
 
@@ -44,11 +57,36 @@ class MenuItem {
       'category': category,
       'rating': rating,
       'timesOrdered': timesOrdered,
+      'available': available,
     };
   }
 
   /// Whether this item can be rendered, i.e. it has a name.
   bool get isValid => name.isNotEmpty;
+
+  MenuItem copyWith({
+    String? name,
+    String? description,
+    int? price,
+    String? imageAsset,
+    String? category,
+    double? rating,
+    int? timesOrdered,
+    bool? available,
+    String? docId,
+  }) {
+    return MenuItem(
+      name: name ?? this.name,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      imageAsset: imageAsset ?? this.imageAsset,
+      category: category ?? this.category,
+      rating: rating ?? this.rating,
+      timesOrdered: timesOrdered ?? this.timesOrdered,
+      available: available ?? this.available,
+      docId: docId ?? this.docId,
+    );
+  }
 }
 
 String _asString(Object? value) => value?.toString() ?? '';

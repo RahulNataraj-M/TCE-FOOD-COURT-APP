@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../config/app_config.dart';
+import '../models/app_role.dart';
 
 /// Why a sign-in attempt did not produce a signed-in user.
 enum AuthFailureReason {
@@ -46,7 +47,14 @@ abstract class AuthService {
   Future<User> signInWithGoogle();
 
   /// Signs in an existing Firebase user with email and password.
-  Future<User> signInWithEmailPassword(String email, String password);
+  ///
+  /// The [role] parameter controls the domain gate: students must use a
+  /// `@student.tce.edu` address; staff and admin may use any email.
+  Future<User> signInWithEmailPassword(
+    String email,
+    String password, {
+    AppRole role = AppRole.student,
+  });
 
   /// Creates a Firebase user with email and password.
   Future<User> createAccountWithEmailPassword({
@@ -59,8 +67,16 @@ abstract class AuthService {
 
   Future<void> signOut();
 
-  static bool isAllowedEmail(String? email) {
+  /// Returns the signed-in user's role from `users/{uid}`.
+  ///
+  /// Defaults to [AppRole.student] when no document exists so existing
+  /// accounts keep working.
+  Future<AppRole> currentRole();
+
+  static bool isAllowedEmail(String? email, {AppRole role = AppRole.student}) {
     if (email == null || email.isEmpty) return false;
+    // Staff and admin can use any email address.
+    if (role != AppRole.student) return true;
     return email.toLowerCase().endsWith('@${AppConfig.allowedEmailDomain}');
   }
 }
@@ -113,6 +129,21 @@ class FirebaseAuthService implements AuthService {
 
   @override
   User? get currentUser => _auth.currentUser;
+
+  @override
+  Future<AppRole> currentRole() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return AppRole.student;
+    try {
+      final doc = await _firestore
+          .collection(AppConfig.usersCollection)
+          .doc(uid)
+          .get();
+      return AppRole.fromName(doc.data()?['role']?.toString());
+    } on Object {
+      return AppRole.student;
+    }
+  }
 
   @override
   Future<User> signInWithGoogle() async {
@@ -178,12 +209,18 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<User> signInWithEmailPassword(String email, String password) async {
+  Future<User> signInWithEmailPassword(
+    String email,
+    String password, {
+    AppRole role = AppRole.student,
+  }) async {
     final normalizedEmail = email.trim().toLowerCase();
-    if (!AuthService.isAllowedEmail(normalizedEmail)) {
-      throw const AuthFailure(
+    if (!AuthService.isAllowedEmail(normalizedEmail, role: role)) {
+      throw AuthFailure(
         AuthFailureReason.unauthorizedDomain,
-        'Only @student.tce.edu accounts can sign in.',
+        role == AppRole.student
+            ? 'Only @student.tce.edu accounts can sign in.'
+            : 'Enter a valid email address.',
       );
     }
     if (password.isEmpty) {
@@ -259,6 +296,7 @@ class FirebaseAuthService implements AuthService {
         'firstName': firstName.trim(),
         'lastName': lastName.trim(),
         'phoneNumber': phoneNumber.trim(),
+        'role': AppRole.student.wireName,
       });
       if (!AuthService.isAllowedEmail(user.email)) {
         await _auth.signOut();

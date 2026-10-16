@@ -61,10 +61,7 @@ class _ProfileHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.arrow_back, color: AppColors.primary),
-          ),
+          const SizedBox(width: 48),
           const Expanded(
             child: Text(
               'Profile',

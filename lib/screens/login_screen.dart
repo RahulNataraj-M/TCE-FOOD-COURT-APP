@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/app_role.dart';
 import '../services/app_scope.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
@@ -13,6 +14,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   bool _isSigningIn = false;
+  AppRole _selectedRole = AppRole.student;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -67,6 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await authService.signInWithEmailPassword(
         _emailController.text,
         _passwordController.text,
+        role: _selectedRole,
       );
     } on AuthFailure catch (failure) {
       messenger.showSnackBar(
@@ -145,17 +148,44 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const _LoginHeader(),
                 const SizedBox(height: AppSpacing.xl),
-                const _LoginMessage(),
+                SegmentedButton<AppRole>(
+                  segments: const [
+                    ButtonSegment(
+                      value: AppRole.student,
+                      label: Text('Student'),
+                      icon: Icon(Icons.school, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: AppRole.staff,
+                      label: Text('Staff'),
+                      icon: Icon(Icons.restaurant, size: 18),
+                    ),
+                    ButtonSegment(
+                      value: AppRole.admin,
+                      label: Text('Admin'),
+                      icon: Icon(Icons.admin_panel_settings, size: 18),
+                    ),
+                  ],
+                  selected: {_selectedRole},
+                  onSelectionChanged: (selection) {
+                    setState(() => _selectedRole = selection.first);
+                  },
+                  showSelectedIcon: false,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                _LoginMessage(role: _selectedRole),
                 const SizedBox(height: AppSpacing.xl),
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
                   enabled: !_isSigningIn,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Email',
-                    hintText: 'you@student.tce.edu',
-                    prefixIcon: Icon(Icons.email_outlined),
+                    hintText: _selectedRole == AppRole.student
+                        ? 'you@student.tce.edu'
+                        : 'you@tce.edu',
+                    prefixIcon: const Icon(Icons.email_outlined),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -175,24 +205,28 @@ class _LoginScreenState extends State<LoginScreen> {
                   height: 48,
                   child: OutlinedButton(
                     onPressed: _isSigningIn ? null : _signInWithEmailPassword,
-                    child: const Text('Sign in with email'),
+                    child: Text(_selectedRole == AppRole.student
+                        ? 'Sign in with email'
+                        : 'Sign in'),
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: OutlinedButton(
-                    onPressed: _isSigningIn ? null : _createAccount,
-                    child: const Text('New user? Create an account'),
+                if (_selectedRole == AppRole.student) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: _isSigningIn ? null : _createAccount,
+                      child: const Text('New user? Create an account'),
+                    ),
                   ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                const _OrDivider(),
-                const SizedBox(height: AppSpacing.md),
-                _GoogleButton(isBusy: _isSigningIn, onTap: _signInWithGoogle),
+                  const SizedBox(height: AppSpacing.md),
+                  const _OrDivider(),
+                  const SizedBox(height: AppSpacing.md),
+                  _GoogleButton(isBusy: _isSigningIn, onTap: _signInWithGoogle),
+                ],
                 const SizedBox(height: AppSpacing.xl),
-                const _LoginFooter(),
+                _LoginFooter(role: _selectedRole),
               ],
             ),
           ),
@@ -356,7 +390,7 @@ class _LoginHeader extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(100),
           child: Image.asset(
-            'assets/images/logo.jpg',
+            'assets/images/tce-logo.png',
             width: 96,
             height: 96,
             fit: BoxFit.cover,
@@ -409,21 +443,37 @@ class _LoginHeader extends StatelessWidget {
 }
 
 class _LoginMessage extends StatelessWidget {
-  const _LoginMessage();
+  final AppRole role;
+
+  const _LoginMessage({required this.role});
 
   @override
   Widget build(BuildContext context) {
+    final (title, subtitle) = switch (role) {
+      AppRole.student => (
+          'Welcome Back',
+          'Order food from your campus food court quickly and efficiently.',
+        ),
+      AppRole.staff => (
+          'Staff Login',
+          'Sign in to view incoming orders and update their status.',
+        ),
+      AppRole.admin => (
+          'Admin Login',
+          'Sign in to manage menu items, prices, availability, and users.',
+        ),
+    };
     return Column(
       children: [
         Text(
-          'Welcome Back',
+          title,
           style: Theme.of(context).textTheme.headlineMedium,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: AppSpacing.xs),
-        const Text(
-          'Order food from your campus food court quickly and efficiently.',
-          style: TextStyle(
+        Text(
+          subtitle,
+          style: const TextStyle(
             fontSize: 16,
             height: 24 / 16,
             color: AppColors.secondary,
@@ -477,17 +527,33 @@ class _GoogleButton extends StatelessWidget {
 }
 
 class _LoginFooter extends StatelessWidget {
-  const _LoginFooter();
+  final AppRole role;
+
+  const _LoginFooter({required this.role});
 
   @override
   Widget build(BuildContext context) {
+    final (heading, detail) = switch (role) {
+      AppRole.student => (
+          'Use your student email account',
+          'Only @student.tce.edu accounts can access the application.',
+        ),
+      AppRole.staff => (
+          'Food Court Staff',
+          'Use your staff email and password to sign in.',
+        ),
+      AppRole.admin => (
+          'Administrator',
+          'Use your admin email and password to sign in.',
+        ),
+    };
     return Column(
       children: [
         const Divider(color: AppColors.borderSubtle),
         const SizedBox(height: AppSpacing.sm),
-        const Text(
-          'Use your student email account',
-          style: TextStyle(
+        Text(
+          heading,
+          style: const TextStyle(
             fontSize: 14,
             height: 20 / 14,
             fontWeight: FontWeight.w600,
@@ -496,9 +562,9 @@ class _LoginFooter extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Only @student.tce.edu accounts can access the application.',
-          style: TextStyle(
+        Text(
+          detail,
+          style: const TextStyle(
             fontSize: 14,
             height: 20 / 14,
             color: AppColors.secondary,

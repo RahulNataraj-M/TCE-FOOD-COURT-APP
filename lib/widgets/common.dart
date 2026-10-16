@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/order.dart';
 import '../theme/app_theme.dart';
 
 class IniAvatar extends StatelessWidget {
@@ -95,6 +96,43 @@ class CartBadge extends StatelessWidget {
           color: AppColors.onError,
           fontSize: 9,
           fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+/// A small pill that renders an [OrderStatus] with its own label and colour.
+class OrderStatusBadge extends StatelessWidget {
+  final OrderStatus status;
+
+  const OrderStatusBadge({super.key, required this.status});
+
+  /// The user-facing label and colour for [status].
+  static (String, Color) describe(OrderStatus status) => switch (status) {
+    OrderStatus.placed => ('Placed', AppColors.statusPending),
+    OrderStatus.preparing => ('Preparing', AppColors.tertiary),
+    OrderStatus.ready => ('Ready', AppColors.successGreen),
+    OrderStatus.completed => ('Completed', AppColors.successGreen),
+    OrderStatus.cancelled => ('Cancelled', AppColors.error),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = describe(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          letterSpacing: 0.6,
+          fontWeight: FontWeight.w600,
+          color: color,
         ),
       ),
     );

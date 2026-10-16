@@ -29,7 +29,7 @@ class LocalDatabase {
   bool _unavailable = false;
 
   static const String _databaseName = 'tce_foodcourt.db';
-  static const int _schemaVersion = 1;
+  static const int _schemaVersion = 2;
 
   DatabaseFactory get _databaseFactory => _factory ?? databaseFactory;
 
@@ -71,7 +71,8 @@ class LocalDatabase {
         imageAsset TEXT NOT NULL DEFAULT '',
         category TEXT NOT NULL DEFAULT '',
         rating REAL NOT NULL DEFAULT 0,
-        timesOrdered INTEGER NOT NULL DEFAULT 0
+        timesOrdered INTEGER NOT NULL DEFAULT 0,
+        available INTEGER NOT NULL DEFAULT 1
       )
     ''');
     batch.execute('''
@@ -112,7 +113,7 @@ class LocalDatabase {
         for (final item in items) {
           batch.insert(
             'menu_items',
-            item.toMap(),
+            _menuRow(item),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
@@ -219,6 +220,18 @@ class LocalDatabase {
     final db = _db;
     _db = null;
     await db?.close();
+  }
+  Map<String, Object?> _menuRow(MenuItem item) {
+    return {
+      'name': item.name,
+      'description': item.description,
+      'price': item.price,
+      'imageAsset': item.imageAsset,
+      'category': item.category,
+      'rating': item.rating,
+      'timesOrdered': item.timesOrdered,
+      'available': item.available ? 1 : 0,
+    };
   }
 
   Map<String, Object?> _orderRow(Order order, String userId) {

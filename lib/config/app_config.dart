@@ -20,6 +20,9 @@ class AppConfig {
   /// Firestore collection holding the per-user documents.
   static const String usersCollection = 'users';
 
-  /// Sub-collection of `users/{uid}` holding that user's orders.
+  /// Top-level collection holding every order across all users.
+  ///
+  /// Each document carries a `userId` field so students can read their own
+  /// orders while staff read the whole queue.
   static const String ordersCollection = 'orders';
 }

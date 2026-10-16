@@ -1,0 +1,13 @@
+{
+  "name": "tce-foodcourt-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Firebase provisioning scripts for the TCE Food Court app.",
+  "scripts": {
+    "seed:users": "node scripts/seed-users.js",
+    "seed:menu": "node scripts/seed-menu.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

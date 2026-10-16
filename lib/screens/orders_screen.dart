@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/cart_controller.dart';
 import '../models/order.dart';
 import '../services/app_scope.dart';
 import '../services/firebase_errors.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 import 'cancel_order_screen.dart';
+import 'cart_screen.dart';
+import 'order_detail_screen.dart';
 import 'replace_order_screen.dart';
 
 class OrdersScreen extends StatelessWidget {
@@ -82,7 +86,7 @@ class _OrdersHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: () {},
+            onPressed: () => Navigator.of(context).maybePop(),
             icon: const Icon(
               Icons.arrow_back,
               color: AppColors.onSecondaryContainer,
@@ -102,7 +106,11 @@ class _OrdersHeader extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: IconButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CartScreen()),
+                );
+              },
               icon: const Icon(
                 Icons.shopping_cart,
                 color: AppColors.onSecondaryContainer,
@@ -522,27 +530,7 @@ class _HistoryCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: AppSpacing.xs),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.successGreen.withValues(
-                              alpha: 0.1,
-                            ),
-                            borderRadius: BorderRadius.circular(100),
-                          ),
-                          child: const Text(
-                            'Completed',
-                            style: TextStyle(
-                              fontSize: 12,
-                              letterSpacing: 0.6,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.successGreen,
-                            ),
-                          ),
-                        ),
+                        OrderStatusBadge(status: order.status),
                       ],
                     ),
                     const SizedBox(height: AppSpacing.base),
@@ -574,7 +562,13 @@ class _HistoryCard extends StatelessWidget {
                 child: SizedBox(
                   height: 44,
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => OrderDetailScreen(order: order),
+                        ),
+                      );
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.secondary,
                       side: const BorderSide(color: AppColors.secondary),
@@ -598,7 +592,18 @@ class _HistoryCard extends StatelessWidget {
                 child: SizedBox(
                   height: 44,
                   child: FilledButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      CartController.instance.addOrder(order);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Items added to your cart'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const CartScreen()),
+                      );
+                    },
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.surfaceContainer,
                       foregroundColor: AppColors.primary,

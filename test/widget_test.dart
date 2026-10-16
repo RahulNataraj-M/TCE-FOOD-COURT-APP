@@ -9,9 +9,13 @@ import 'package:tce_foodcourt_app/controllers/cart_controller.dart';
 import 'package:tce_foodcourt_app/controllers/menu_controller.dart';
 import 'package:tce_foodcourt_app/controllers/orders_controller.dart';
 import 'package:tce_foodcourt_app/main.dart';
+import 'package:tce_foodcourt_app/models/app_role.dart';
 import 'package:tce_foodcourt_app/models/menu_item.dart';
+import 'package:tce_foodcourt_app/models/order.dart';
 import 'package:tce_foodcourt_app/repositories/menu_repository.dart';
 import 'package:tce_foodcourt_app/repositories/order_repository.dart';
+import 'package:tce_foodcourt_app/repositories/user_repository.dart';
+import 'package:tce_foodcourt_app/screens/cancel_order_screen.dart';
 import 'package:tce_foodcourt_app/screens/profile_screen.dart';
 import 'package:tce_foodcourt_app/services/app_scope.dart';
 import 'package:tce_foodcourt_app/services/auth_service.dart';
@@ -41,11 +45,17 @@ class MockAuthService extends AuthService {
   /// When set, [signInWithGoogle] throws it instead of signing in.
   AuthFailure? failWith;
 
+  /// When set, [currentRole] returns this instead of reading Firestore.
+  AppRole? overrideRole;
+
   @override
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   @override
   User? get currentUser => _auth.currentUser;
+
+  @override
+  Future<AppRole> currentRole() async => overrideRole ?? AppRole.student;
 
   @override
   Future<User> signInWithGoogle() async {
@@ -56,7 +66,11 @@ class MockAuthService extends AuthService {
   }
 
   @override
-  Future<User> signInWithEmailPassword(String email, String password) async {
+  Future<User> signInWithEmailPassword(
+    String email,
+    String password, {
+    AppRole role = AppRole.student,
+  }) async {
     final failure = failWith;
     if (failure != null) throw failure;
     final result = await _auth.signInWithCredential(null);
@@ -94,7 +108,8 @@ class MockAuthService extends AuthService {
     authService: auth,
     menuRepository: menuRepository,
     orderRepository: orderRepository,
-    menuController: MenuController(repository: menuRepository),
+    userRepository: UserRepository(firestore: db),
+    menuController: MenuController(repository: menuRepository, authService: auth),
     ordersController: OrdersController(
       repository: orderRepository,
       authService: auth,
@@ -126,6 +141,8 @@ void main() {
     expect(find.text('Quick Actions'), findsOneWidget);
 
     // Go to the menu (Order Food)
+    await tester.ensureVisible(find.text('Order'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Order'));
     await tester.pumpAndSettle();
 
@@ -193,6 +210,8 @@ void main() {
     await tester.ensureVisible(find.text('Continue with Google'));
     await tester.tap(find.text('Continue with Google'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Order'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Order'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add').first);
@@ -204,17 +223,14 @@ void main() {
     await tester.tap(find.text('Pay ₹150'));
     await tester.pumpAndSettle();
 
-    final orders = await firestore
-        .collection('users')
-        .doc('test-uid-1')
-        .collection('orders')
-        .get();
+    final orders = await firestore.collection('orders').get();
 
     expect(orders.docs, hasLength(1));
     final data = orders.docs.single.data();
     expect(data['total'], 150);
     expect(data['status'], 'placed');
     expect(data['displayId'], startsWith('#TCE'));
+    expect(data['userId'], 'test-uid-1');
   });
 
   testWidgets(
@@ -256,6 +272,8 @@ void main() {
     expect(find.text('Chicken Biriyani'), findsNothing);
     expect(test.services.menuController.isUsingLocalCatalog, isFalse);
 
+    await tester.ensureVisible(find.text('Order'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Order'));
     await tester.pumpAndSettle();
 
@@ -338,8 +356,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('What are you hungry for?'), findsOneWidget);
 
-    // The profile tab lives in the bottom nav scaffold that the confirmation
-    // screen opens, so get there through a real checkout.
+    // The Profile tab lives in the persistent Home/Profile bottom navigation,
+    // so walk through a real checkout and switch tabs afterwards.
+    await tester.ensureVisible(find.text('Order'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Order'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add').first);
@@ -375,5 +395,168 @@ void main() {
 
     expect(find.text('TCE Food Court'), findsOneWidget);
     expect(test.auth.currentUser, isNull);
+  });
+
+  testWidgets('Cancelling an active order removes it from the orders screen', (
+    tester,
+  ) async {
+    final test = buildTestServices();
+    await tester.pumpWidget(TceFoodCourtApp(services: test.services));
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pumpAndSettle();
+
+    // Place an order so there is a persisted active order to cancel.
+    await tester.ensureVisible(find.text('Order'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Order'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View Cart'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Proceed to Payment'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pay ₹150'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View Order'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Active Order'), findsOneWidget);
+    expect(find.text('No active order right now.'), findsNothing);
+    expect(test.services.ordersController.activeOrder, isNotNull);
+
+    // Open the cancel screen and confirm the cancellation.
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Cancel Order'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CancelOrderScreen), findsOneWidget);
+    final confirmCancel = find.descendant(
+      of: find.byType(CancelOrderScreen),
+      matching: find.widgetWithText(OutlinedButton, 'Cancel Order'),
+    );
+    await tester.ensureVisible(confirmCancel);
+    await tester.pumpAndSettle();
+    await tester.tap(confirmCancel);
+    await tester.pumpAndSettle();
+
+    // The order is no longer active and the empty state is shown.
+    expect(test.services.ordersController.activeOrder, isNull);
+    expect(find.text('No active order right now.'), findsOneWidget);
+
+    // The cancelled order now appears in history with the correct status,
+    // not as "Completed".
+    expect(find.text('Cancelled'), findsWidgets);
+    expect(find.text('Completed'), findsNothing);
+  });
+
+  test('Order Again replaces the cart with the past order items', () {
+    final cart = CartController.instance;
+    cart.add(
+      const MenuItem(
+        name: 'Leftover Item',
+        description: '',
+        price: 10,
+        imageAsset: '',
+        category: '',
+      ),
+    );
+
+    cart.addOrder(
+      Order(
+        id: '#TCE1',
+        total: 210,
+        placedAt: DateTime.now(),
+        status: OrderStatus.cancelled,
+        items: const [
+          OrderItem(name: 'Chicken Biriyani', quantity: 2, unitPrice: 100),
+          OrderItem(name: 'Lime Juice', quantity: 1, unitPrice: 10),
+        ],
+      ),
+    );
+
+    expect(cart.itemCount, 3);
+    expect(cart.items.first.item.name, 'Chicken Biriyani');
+    expect(cart.items.first.quantity, 2);
+    expect(cart.items.any((c) => c.item.name == 'Leftover Item'), isFalse);
+  });
+
+  testWidgets('Staff sign-in opens the incoming orders dashboard', (
+    tester,
+  ) async {
+    final auth = MockAuthService()..overrideRole = AppRole.staff;
+    final test = buildTestServices(authService: auth);
+    await tester.pumpWidget(TceFoodCourtApp(services: test.services));
+
+    // Switch to the Staff login; the student-only options disappear.
+    await tester.tap(find.text('Staff'));
+    await tester.pumpAndSettle();
+    expect(find.text('Staff Login'), findsOneWidget);
+    expect(find.text('Continue with Google'), findsNothing);
+    expect(find.text('New user? Create an account'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).at(0), 'staff@tce.edu');
+    await tester.enterText(find.byType(TextField).at(1), 'password');
+    final signIn = find.text('Sign in');
+    await tester.ensureVisible(signIn);
+    await tester.tap(signIn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Incoming Orders'), findsOneWidget);
+    expect(find.text('No active orders'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+  });
+
+  testWidgets('Admin sign-in opens the management dashboard', (tester) async {
+    final auth = MockAuthService()..overrideRole = AppRole.admin;
+    final test = buildTestServices(authService: auth);
+    await tester.pumpWidget(TceFoodCourtApp(services: test.services));
+
+    await tester.tap(find.text('Admin'));
+    await tester.pumpAndSettle();
+    expect(find.text('Admin Login'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).at(0), 'admin@tce.edu');
+    await tester.enterText(find.byType(TextField).at(1), 'password');
+    final signIn = find.text('Sign in');
+    await tester.ensureVisible(signIn);
+    await tester.tap(signIn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manage Menu'), findsOneWidget);
+    expect(find.text('Users'), findsOneWidget);
+  });
+
+  testWidgets('Unavailable menu items are hidden from students', (
+    tester,
+  ) async {
+    final firestore = FakeFirebaseFirestore();
+    await firestore.collection('menu_items').add({
+      'name': 'Vada',
+      'description': 'Crispy lentil fritter',
+      'price': 25,
+      'imageAsset': 'assets/images/veg_rice_bowl.jpg',
+      'category': 'Snacks',
+      'rating': 4.4,
+      'timesOrdered': 12,
+      'available': true,
+    });
+    await firestore.collection('menu_items').add({
+      'name': 'Sold Out Dosa',
+      'description': 'Unavailable today',
+      'price': 70,
+      'imageAsset': 'assets/images.jpeg',
+      'category': 'Breakfast',
+      'available': false,
+    });
+
+    final test = buildTestServices(firestore: firestore);
+    await tester.pumpWidget(TceFoodCourtApp(services: test.services));
+    await tester.ensureVisible(find.text('Continue with Google'));
+    await tester.tap(find.text('Continue with Google'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Vada'), findsWidgets);
+    expect(find.text('Sold Out Dosa'), findsNothing);
   });
 }

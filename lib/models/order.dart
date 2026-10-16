@@ -24,6 +24,12 @@ class Order {
   final DateTime placedAt;
   final OrderStatus status;
 
+  /// The uid of the student who placed the order.
+  final String? userId;
+
+  /// The email of the student who placed the order.
+  final String? userEmail;
+
   const Order({
     required this.id,
     required this.items,
@@ -31,6 +37,8 @@ class Order {
     required this.placedAt,
     this.status = OrderStatus.placed,
     this.docId,
+    this.userId,
+    this.userEmail,
   });
 
   int get itemSummary => items.fold(0, (sum, i) => sum + i.quantity);
@@ -41,7 +49,12 @@ class Order {
       status == OrderStatus.preparing ||
       status == OrderStatus.ready;
 
-  Order copyWith({OrderStatus? status, String? docId}) {
+  Order copyWith({
+    OrderStatus? status,
+    String? docId,
+    String? userId,
+    String? userEmail,
+  }) {
     return Order(
       id: id,
       items: items,
@@ -49,6 +62,8 @@ class Order {
       placedAt: placedAt,
       status: status ?? this.status,
       docId: docId ?? this.docId,
+      userId: userId ?? this.userId,
+      userEmail: userEmail ?? this.userEmail,
     );
   }
 
@@ -60,6 +75,8 @@ class Order {
       'total': total,
       'status': status.name,
       'placedAt': placedAt.toUtc(),
+      if (userId != null) 'userId': userId,
+      if (userEmail != null) 'userEmail': userEmail,
       'items': [
         for (final item in items)
           {

@@ -5,6 +5,7 @@ import '../controllers/menu_controller.dart';
 import '../controllers/orders_controller.dart';
 import '../repositories/menu_repository.dart';
 import '../repositories/order_repository.dart';
+import '../repositories/user_repository.dart';
 import 'auth_service.dart';
 import 'local_database.dart';
 
@@ -18,6 +19,7 @@ class AppServices {
     required this.authService,
     required this.menuRepository,
     required this.orderRepository,
+    required this.userRepository,
     required this.menuController,
     required this.ordersController,
     this.localDatabase,
@@ -36,7 +38,11 @@ class AppServices {
       authService: authService,
       menuRepository: menuRepository,
       orderRepository: orderRepository,
-      menuController: MenuController(repository: menuRepository),
+      userRepository: UserRepository(),
+      menuController: MenuController(
+        repository: menuRepository,
+        authService: authService,
+      ),
       ordersController: OrdersController(
         repository: orderRepository,
         authService: authService,
@@ -48,6 +54,7 @@ class AppServices {
   final AuthService authService;
   final MenuRepository menuRepository;
   final OrderRepository orderRepository;
+  final UserRepository userRepository;
   final MenuController menuController;
   final OrdersController ordersController;
 

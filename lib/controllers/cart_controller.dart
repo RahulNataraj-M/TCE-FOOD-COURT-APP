@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../models/menu_item.dart';
+import '../models/order.dart';
 
 class CartController extends ChangeNotifier {
   CartController._();
@@ -46,6 +47,26 @@ class CartController extends ChangeNotifier {
 
   void clear() {
     _items.clear();
+    notifyListeners();
+  }
+
+  /// Replaces the cart with the items from a past [order] ("Order Again").
+  void addOrder(Order order) {
+    _items.clear();
+    for (final item in order.items) {
+      _items.add(
+        CartItem(
+          item: MenuItem(
+            name: item.name,
+            description: '',
+            price: item.unitPrice,
+            imageAsset: '',
+            category: '',
+          ),
+          quantity: item.quantity,
+        ),
+      );
+    }
     notifyListeners();
   }
 }

@@ -1,51 +1,115 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import '../screens/home_screen.dart';
-import '../screens/orders_screen.dart';
 import '../screens/profile_screen.dart';
 
-class BottomNavScaffold extends StatefulWidget {
-  final int selectedIndex;
-  final List<Widget> pages;
+/// Exposes the bottom navigation controller to descendants so pushed screens
+/// (for example the order confirmation) can switch tabs programmatically.
+class MainShellScope extends InheritedWidget {
+  final int currentIndex;
+  final void Function(int index) selectTab;
 
-  const BottomNavScaffold({
+  const MainShellScope({
     super.key,
-    this.selectedIndex = 0,
-    this.pages = const [],
+    required this.currentIndex,
+    required this.selectTab,
+    required super.child,
   });
 
+  static MainShellScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<MainShellScope>();
+  }
+
   @override
-  State<BottomNavScaffold> createState() => _BottomNavScaffoldState();
+  bool updateShouldNotify(MainShellScope oldWidget) {
+    return currentIndex != oldWidget.currentIndex;
+  }
 }
 
-class _BottomNavScaffoldState extends State<BottomNavScaffold> {
-  late int _index = widget.selectedIndex;
+/// Root shell shown once a user is signed in.
+///
+/// Keeps a persistent Home/Profile bottom bar visible on every page by giving
+/// each tab its own [Navigator]. Pushes performed from inside a tab stay in
+/// that tab, so the bar is never covered.
+class MainShell extends StatefulWidget {
+  final int initialIndex;
+
+  const MainShell({super.key, this.initialIndex = 0});
+
+  @override
+  State<MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<MainShell> {
+  late int _index = widget.initialIndex;
+  final _homeNavKey = GlobalKey<NavigatorState>();
+  final _profileNavKey = GlobalKey<NavigatorState>();
+
+  NavigatorState get _currentNav =>
+      (_index == 0 ? _homeNavKey : _profileNavKey).currentState!;
+
+  void _selectTab(int index) {
+    if (index == _index) {
+      // Re-tapping the active tab returns it to its root screen.
+      _currentNav.popUntil((route) => route.isFirst);
+      return;
+    }
+    setState(() => _index = index);
+  }
+
+  Future<void> _handlePop(bool didPop, Object? result) async {
+    if (didPop) return;
+    final nav = _currentNav;
+    if (nav.canPop()) {
+      nav.pop();
+      return;
+    }
+    if (_index != 0) {
+      setState(() => _index = 0);
+      return;
+    }
+    await SystemNavigator.pop();
+  }
+
+  Widget _tab(GlobalKey<NavigatorState> key, Widget child) {
+    return Navigator(
+      key: key,
+      onGenerateRoute: (settings) => MaterialPageRoute<void>(
+        settings: settings,
+        builder: (_) => child,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> pages = widget.pages.isEmpty
-        ? const [
-            HomeScreen(),
-            OrdersScreen(),
-            ProfileScreen(),
-          ]
-        : widget.pages;
-
-    return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: pages,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.95),
-          border: const Border(
-            top: BorderSide(color: AppColors.borderSubtle),
+    return MainShellScope(
+      currentIndex: _index,
+      selectTab: _selectTab,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: _handlePop,
+        child: Scaffold(
+          body: IndexedStack(
+            index: _index,
+            children: [
+              _tab(_homeNavKey, const HomeScreen()),
+              _tab(_profileNavKey, const ProfileScreen()),
+            ],
           ),
-        ),
-        child: _NavBar(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface.withValues(alpha: 0.95),
+              border: const Border(
+                top: BorderSide(color: AppColors.borderSubtle),
+              ),
+            ),
+            child: _NavBar(
+              currentIndex: _index,
+              onTap: _selectTab,
+            ),
+          ),
         ),
       ),
     );
@@ -74,16 +138,10 @@ class _NavBar extends StatelessWidget {
               onTap: () => onTap(0),
             ),
             _NavItem(
-              icon: Icons.receipt_long,
-              label: 'Orders',
-              active: currentIndex == 1,
-              onTap: () => onTap(1),
-            ),
-            _NavItem(
               icon: Icons.person,
               label: 'Profile',
-              active: currentIndex == 2,
-              onTap: () => onTap(2),
+              active: currentIndex == 1,
+              onTap: () => onTap(1),
             ),
           ],
         ),

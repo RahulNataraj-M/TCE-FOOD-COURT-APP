@@ -32,6 +32,10 @@ class OrdersController extends ChangeNotifier {
   bool _isUsingSamples = true;
   Object? _lastError;
 
+  /// Orders cancelled on this device that were never persisted (the bundled
+  /// sample order). Lets a cancellation stick even without a Firestore record.
+  final Set<String> _cancelledIds = <String>{};
+
   List<Order> get orders => List.unmodifiable(_orders);
 
   bool get isLoading => _isLoading;
@@ -44,15 +48,24 @@ class OrdersController extends ChangeNotifier {
   /// The order the kitchen is currently working on, if any.
   Order? get activeOrder {
     for (final order in _orders) {
-      if (order.isActive) return order;
+      if (order.isActive && !_cancelledIds.contains(order.id)) return order;
     }
-    return _isUsingSamples ? SampleOrders.activeOrder : null;
+    if (!_isUsingSamples) return null;
+    final sample = SampleOrders.activeOrder;
+    if (_cancelledIds.contains(sample.id)) return null;
+    return sample;
   }
 
   /// Completed and cancelled orders, newest first.
   List<Order> get history {
     final closed = _orders.where((order) => !order.isActive).toList();
-    if (closed.isEmpty && _isUsingSamples) return SampleOrders.history;
+    if (closed.isEmpty && _isUsingSamples) {
+      return [
+        if (_cancelledIds.contains(SampleOrders.activeOrder.id))
+          SampleOrders.activeOrder.copyWith(status: OrderStatus.cancelled),
+        ...SampleOrders.history,
+      ];
+    }
     return closed;
   }
 
@@ -66,9 +79,27 @@ class OrdersController extends ChangeNotifier {
     return saved;
   }
 
-  /// Cancels a stored order.
+  /// Cancels an order.
+  ///
+  /// Persisted orders are marked [OrderStatus.cancelled] in Firestore and the
+  /// cached list is refreshed. Orders without a document id (the bundled
+  /// sample order shown while the account has no stored orders) are cancelled
+  /// in memory so they disappear from the active order immediately.
+  ///
+  /// Rethrows any persistence failure so the caller can tell the user, undoing
+  /// the in-memory cancellation so the order stays visible.
   Future<void> cancelOrder(Order order) async {
-    await _repository.updateStatus(order, OrderStatus.cancelled);
+    _cancelledIds.add(order.id);
+    if (order.docId == null) {
+      notifyListeners();
+      return;
+    }
+    try {
+      await _repository.updateStatus(order, OrderStatus.cancelled);
+    } on Object {
+      _cancelledIds.remove(order.id);
+      rethrow;
+    }
     await load();
   }
 
